@@ -32,6 +32,13 @@
       "required": true,
       "title": "Jira API Token",
       "description": "Your Jira API token (get from https://id.atlassian.com/manage-profile/security/api-tokens)"
+    },
+    {
+      "name": "anthropicApiKey",
+      "type": "password",
+      "required": true,
+      "title": "Anthropic API Key",
+      "description": "Your Anthropic API key for Claude AI summary generation"
     }
   ],
   "dependencies": {
