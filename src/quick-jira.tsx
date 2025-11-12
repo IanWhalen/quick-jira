@@ -20,6 +20,29 @@ interface TeamOption {
   label: string;
 }
 
+interface JiraCreateMetaResponse {
+  projects?: Array<{
+    issuetypes?: Array<{
+      fields?: {
+        customfield_10074?: {
+          allowedValues?: Array<{ value: string }>;
+        };
+      };
+    }>;
+  }>;
+}
+
+interface AnthropicResponse {
+  content: Array<{
+    text: string;
+  }>;
+}
+
+interface JiraIssueResponse {
+  key: string;
+  id?: string;
+}
+
 export default function QuickJiraCreate() {
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [isLoadingTeams, setIsLoadingTeams] = useState(true);
@@ -41,13 +64,13 @@ export default function QuickJiraCreate() {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as JiraCreateMetaResponse;
         const project = data.projects?.[0];
         const issueType = project?.issuetypes?.[0];
         const teamField = issueType?.fields?.customfield_10074;
         
         if (teamField?.allowedValues) {
-          const teamOptions = teamField.allowedValues.map((option: any) => ({
+          const teamOptions = teamField.allowedValues.map((option) => ({
             value: option.value,
             label: option.value
           }));
@@ -93,7 +116,7 @@ export default function QuickJiraCreate() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-3-opus-20240229',
           max_tokens: 50,
           messages: [
             {
@@ -114,7 +137,7 @@ Summary:`
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json() as AnthropicResponse;
         let generatedSummary = data.content[0].text.trim();
         
         // Clean up the response - remove quotes, notes, explanations
@@ -154,37 +177,29 @@ Summary:`
     const preferences = getPreferenceValues<Preferences>();
     const auth = Buffer.from(`${preferences.jiraEmail}:${preferences.jiraApiToken}`).toString('base64');
     
+    const fields: any = {
+      project: {
+        key: values.project
+      },
+      summary: values.summary,
+      issuetype: {
+        name: values.issueType
+      },
+      customfield_10074: [{ value: values.team }] // Team custom field as array
+    };
+    
+    // Only include description if it has content, as plain string
+    if (values.description && values.description.trim()) {
+      fields.description = values.description;
+    }
+    
     const issueData = {
-      fields: {
-        project: {
-          key: values.project
-        },
-        summary: values.summary,
-        description: {
-          type: "doc",
-          version: 1,
-          content: [
-            {
-              type: "paragraph",
-              content: [
-                {
-                  type: "text",
-                  text: values.description || ''
-                }
-              ]
-            }
-          ]
-        },
-        issuetype: {
-          name: values.issueType
-        },
-        customfield_10074: [{ value: values.team }] // Team custom field as array
-      }
+      fields
     };
 
     console.log('Sending to Jira:', JSON.stringify(issueData, null, 2));
 
-    const response = await fetch('https://viam.atlassian.net/rest/api/3/issue', {
+    const response = await fetch('https://viam.atlassian.net/rest/api/2/issue', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${auth}`,
@@ -197,12 +212,42 @@ Summary:`
     console.log('Jira response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.log('Jira error response:', JSON.stringify(errorData, null, 2));
-      throw new Error(JSON.stringify(errorData, null, 2));
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      
+      try {
+        const errorText = await response.text();
+        if (errorText) {
+          try {
+            const errorData = JSON.parse(errorText);
+            console.log('Jira error response:', JSON.stringify(errorData, null, 2));
+            
+            // Extract meaningful error messages from Jira's error response
+            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
+              errorMessage = errorData.errorMessages.join('; ');
+            } else if (errorData.errors && Object.keys(errorData.errors).length > 0) {
+              const errorDetails = Object.entries(errorData.errors)
+                .map(([field, message]) => `${field}: ${message}`)
+                .join('; ');
+              errorMessage = `Validation errors: ${errorDetails}`;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            } else {
+              errorMessage = `HTTP ${response.status}: ${errorText.substring(0, 200)}`;
+            }
+          } catch {
+            // If JSON parsing fails, use the raw text
+            errorMessage = `HTTP ${response.status}: ${errorText.substring(0, 200)}`;
+          }
+        }
+      } catch (textError) {
+        // If reading response fails, use status info
+        errorMessage = `HTTP ${response.status}: Failed to read error response`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    return await response.json() as JiraIssueResponse;
   }
 
   async function handleSubmit(values: FormValues) {
@@ -230,7 +275,7 @@ Summary:`
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              model: 'claude-3-5-sonnet-20241022',
+              model: 'claude-3-opus-20240229',
               max_tokens: 50,
               messages: [
                 {
@@ -251,7 +296,7 @@ Summary:`
           });
 
           if (response.ok) {
-            const data = await response.json();
+            const data = await response.json() as AnthropicResponse;
             let generatedSummary = data.content[0].text.trim();
             
             // Clean up the response - remove quotes, notes, explanations
@@ -289,7 +334,7 @@ Summary:`
       const issueData = {
         ...values,
         summary: finalSummary,
-        description
+        description: values.description || description
       };
       const result = await createJiraIssue(issueData);
       
@@ -326,7 +371,6 @@ Summary:`
           <Action 
             title="Generate Summary" 
             onAction={generateSummary} 
-            isLoading={isGeneratingSummary}
             shortcut={{ modifiers: ["cmd"], key: "g" }}
           />
         </ActionPanel>
