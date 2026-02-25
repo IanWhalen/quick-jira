@@ -7,6 +7,7 @@ interface FormValues {
   team: string;
   project: string;
   issueType: string;
+  addUxResearchLabel: boolean;
 }
 
 interface Preferences {
@@ -191,6 +192,10 @@ Summary:`
     // Only include description if it has content, as plain string
     if (values.description && values.description.trim()) {
       fields.description = values.description;
+    }
+
+    if (values.addUxResearchLabel) {
+      fields.labels = ["ux-research"];
     }
     
     const issueData = {
@@ -402,6 +407,12 @@ Summary:`
         ))}
       </Form.Dropdown>
       
+      <Form.Checkbox
+        id="addUxResearchLabel"
+        label="Add ux-research label"
+        defaultValue={true}
+      />
+
       <Form.Separator />
       
       <Form.TextField 
