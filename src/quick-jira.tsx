@@ -393,12 +393,15 @@ Summary:`
         <Form.Dropdown.Item value="RSDK" title="RSDK" />
         <Form.Dropdown.Item value="APP" title="APP" />
         <Form.Dropdown.Item value="DATA" title="DATA" />
+        <Form.Dropdown.Item value="CONSULT" title="CONSULT" />
+        <Form.Dropdown.Item value="DOCS" title="DOCS" />
       </Form.Dropdown>
       
       <Form.Dropdown id="issueType" title="Issue Type" defaultValue="Bug">
         <Form.Dropdown.Item value="Bug" title="🐛 Bug" />
-        <Form.Dropdown.Item value="Feature" title="✨ Feature" />
+        <Form.Dropdown.Item value="New Feature" title="✨ New Feature" />
         <Form.Dropdown.Item value="Improvement" title="🔧 Improvement" />
+        <Form.Dropdown.Item value="Document" title="📄 Document" />
       </Form.Dropdown>
       
       <Form.Dropdown id="team" title="Team" isLoading={isLoadingTeams}>
